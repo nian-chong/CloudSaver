@@ -1,5 +1,6 @@
 import { AxiosInstance, AxiosHeaders } from "axios";
 import { logger } from "../utils/logger";
+import { FeishuNotifier } from "../utils/FeishuNotifier";
 import { createAxiosInstance } from "../utils/axiosInstance";
 import { injectable } from "inversify";
 import { Request } from "express";
@@ -176,11 +177,17 @@ export class QuarkService implements ICloudStorageService {
         quarkParams
       );
 
-      return {
+      const result = {
         message: response.data.message,
         data: response.data.data,
       };
+      
+      // 发送通知
+      FeishuNotifier.pushMessage(`✅ 夸克网盘转存成功\n分享ID: ${params.shareCode}\n文件数: ${params.fids.length}`);
+      
+      return result;
     } catch (error) {
+      FeishuNotifier.pushMessage(`❌ 夸克网盘转存失败\n分享ID: ${params.shareCode}\n错误信息: ${error instanceof Error ? error.message : "未知错误"}`);
       throw new Error(error instanceof Error ? error.message : "未知错误");
     }
   }
