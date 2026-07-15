@@ -32,6 +32,9 @@ export function startFeishuBot() {
         logger.error(`Failed to bind chat_id: ${e}`);
       }
 
+      // Ignore messages from apps/bots to prevent infinite loops
+      if (data.sender && data.sender.sender_type === 'app') return;
+
       if (data.message.message_type !== 'text') return;
       
       const content = JSON.parse(data.message.content);
@@ -46,24 +49,37 @@ export function startFeishuBot() {
           data: { content: JSON.stringify({ text: `⏳ 正在搜索: ${keyword}...` }), msg_type: 'text' }
         });
 
-        try {
-          const results = await Searcher.searchAll(keyword);
-          let replyStr = `🔍 搜索结果 (${results.data.length}条):\n`;
-          results.data.slice(0, 10).forEach((item: any, index: number) => {
-            replyStr += `${index + 1}. ${item.title}\nID: ${item.pwdId}\n`;
-          });
-          if (results.data.length > 10) replyStr += '... (仅显示前10条)\n\n可以使用 /transfer-quark <ID> 转存';
-          
-          await client.im.message.reply({
-            path: { message_id: messageId },
-            data: { content: JSON.stringify({ text: replyStr }), msg_type: 'text' }
-          });
-        } catch (error) {
-          await client.im.message.reply({
-            path: { message_id: messageId },
-            data: { content: JSON.stringify({ text: `❌ 搜索失败: ${error}` }), msg_type: 'text' }
-          });
-        }
+        // Run search in background to avoid Feishu webhook timeout
+        (async () => {
+          try {
+            const results = await Searcher.searchAll(keyword);
+            const allItems = results.data.flatMap((channelObj: any) => channelObj.list || []);
+            let replyStr = `🔍 搜索结果 (${allItems.length}条):\n`;
+            allItems.slice(0, 10).forEach((item: any, index: number) => {
+              let pwdId = "未知";
+              if (item.cloudLinks && item.cloudLinks.length > 0) {
+                const link = item.cloudLinks[0];
+                const match = link.match(/\/s\/([a-zA-Z0-9_]+)/);
+                if (match && match[1]) {
+                  pwdId = match[1];
+                }
+              }
+              replyStr += `${index + 1}. ${item.title || "无标题"}\nID: ${pwdId}\n`;
+            });
+            if (allItems.length > 10) replyStr += '... (仅显示前10条)\n\n可以使用 /transfer-quark <ID> 转存';
+            
+            await client.im.message.reply({
+              path: { message_id: messageId },
+              data: { content: JSON.stringify({ text: replyStr }), msg_type: 'text' }
+            });
+          } catch (error) {
+            await client.im.message.reply({
+              path: { message_id: messageId },
+              data: { content: JSON.stringify({ text: `❌ 搜索失败: ${error}` }), msg_type: 'text' }
+            });
+          }
+        })();
+        return;
       } else if (text.startsWith('/transfer-quark ')) {
         const args = text.slice(16).trim().split(' ');
         const pwdId = args[0];
@@ -76,42 +92,45 @@ export function startFeishuBot() {
           data: { content: JSON.stringify({ text: `⏳ 正在为您转存夸克资源: ${pwdId}...` }), msg_type: 'text' }
         });
 
-        try {
-          // Verify DB is initialized since Service needs it
-          const db = container.get<DatabaseService>(TYPES.DatabaseService);
-          if (!db) throw new Error("Database not initialized");
+        (async () => {
+          try {
+            // Verify DB is initialized since Service needs it
+            const db = container.get<DatabaseService>(TYPES.DatabaseService);
+            if (!db) throw new Error("Database not initialized");
 
-          const service = new QuarkService();
-          const shareInfo = await service.getShareInfo(pwdId, passcode);
-          if (!shareInfo || !shareInfo.data || !shareInfo.data.list) {
-            throw new Error("分享链接已失效或需要提取码");
+            const service = new QuarkService();
+            const shareInfo = await service.getShareInfo(pwdId, passcode);
+            if (!shareInfo || !shareInfo.data || !shareInfo.data.list) {
+              throw new Error("分享链接已失效或需要提取码");
+            }
+            const folders = await service.getFolderList("0");
+            if (!folders?.data?.length) {
+              throw new Error("无法获取目标根目录，请检查 Cookie");
+            }
+            const targetFolderId = folders.data[0].cid;
+            
+            await service.saveSharedFile({
+              shareCode: pwdId,
+              receiveCode: shareInfo.data.stoken || '',
+              folderId: targetFolderId,
+              fids: shareInfo.data.list.map((f: any) => f.fileId),
+              fidTokens: shareInfo.data.list.map((f: any) => f.fileIdToken)
+            });
+            
+            // Note: saveSharedFile already triggers FeishuNotifier.pushMessage on success!
+            // So we don't necessarily need to reply here again, but we can do a direct reply for good UX.
+            await client.im.message.reply({
+              path: { message_id: messageId },
+              data: { content: JSON.stringify({ text: `✅ 转存成功！` }), msg_type: 'text' }
+            });
+          } catch (error) {
+             await client.im.message.reply({
+              path: { message_id: messageId },
+              data: { content: JSON.stringify({ text: `❌ 转存失败: ${error}` }), msg_type: 'text' }
+            });
           }
-          const folders = await service.getFolderList("0");
-          if (!folders?.data?.length) {
-            throw new Error("无法获取目标根目录，请检查 Cookie");
-          }
-          const targetFolderId = folders.data[0].cid;
-          
-          await service.saveSharedFile({
-            shareCode: pwdId,
-            receiveCode: shareInfo.data.stoken || '',
-            folderId: targetFolderId,
-            fids: shareInfo.data.list.map((f: any) => f.fileId),
-            fidTokens: shareInfo.data.list.map((f: any) => f.fileIdToken)
-          });
-          
-          // Note: saveSharedFile already triggers FeishuNotifier.pushMessage on success!
-          // So we don't necessarily need to reply here again, but we can do a direct reply for good UX.
-          await client.im.message.reply({
-            path: { message_id: messageId },
-            data: { content: JSON.stringify({ text: `✅ 转存成功！` }), msg_type: 'text' }
-          });
-        } catch (error) {
-           await client.im.message.reply({
-            path: { message_id: messageId },
-            data: { content: JSON.stringify({ text: `❌ 转存失败: ${error}` }), msg_type: 'text' }
-          });
-        }
+        })();
+        return;
       } else {
          await client.im.message.reply({
             path: { message_id: messageId },
