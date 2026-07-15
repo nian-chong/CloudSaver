@@ -12,12 +12,14 @@
     "test:auth": "ts-node -T test_auth.ts",
     "test:admin": "ts-node -T test_admin.ts",
     "test:transfer": "ts-node -T test_transfer.ts",
-    "test": "npm run test:search && npm run test:parse && npm run test:html && npm run test:auth && npm run test:admin && npm run test:transfer"
+    "test": "npm run test:search && npm run test:parse && npm run test:html && npm run test:auth && npm run test:admin && npm run test:transfer",
+    "cli": "ts-node -T src/cli.ts"
   },
   "dependencies": {
     "axios": "^1.6.7",
     "bcrypt": "^5.1.1",
     "cheerio": "^1.0.0",
+    "commander": "^15.0.0",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
