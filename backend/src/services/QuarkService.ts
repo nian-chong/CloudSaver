@@ -183,7 +183,7 @@ export class QuarkService implements ICloudStorageService {
       };
       
       // 发送通知
-      FeishuNotifier.pushMessage(`✅ 夸克网盘转存成功\n分享ID: ${params.shareCode}\n文件数: ${params.fids.length}`);
+      FeishuNotifier.pushMessage(`✅ 夸克网盘转存成功\n分享ID: ${params.shareCode}\n文件数: ${params.fids?.length || 0}`);
       
       return result;
     } catch (error) {

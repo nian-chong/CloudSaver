@@ -8,6 +8,7 @@ import { setupMiddlewares } from "./middleware";
 import routes from "./routes/api";
 import { logger } from "./utils/logger";
 import { errorHandler } from "./middleware/errorHandler";
+import { startFeishuBot } from "./FeishuBot";
 class App {
   private app = express();
   private databaseService = container.get<DatabaseService>(TYPES.DatabaseService);
@@ -30,6 +31,9 @@ class App {
       // 初始化数据库
       await this.databaseService.initialize();
       logger.info("数据库初始化成功");
+
+      // 启动飞书机器人长连接
+      startFeishuBot();
 
       // 启动服务器
       const port = process.env.PORT || 8009;

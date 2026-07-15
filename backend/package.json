@@ -16,6 +16,7 @@
     "cli": "ts-node -T src/cli.ts"
   },
   "dependencies": {
+    "@larksuiteoapi/node-sdk": "^1.71.1",
     "axios": "^1.6.7",
     "bcrypt": "^5.1.1",
     "cheerio": "^1.0.0",
