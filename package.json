@@ -24,7 +24,8 @@
     "format:check": "prettier --check \"**/*.{js,ts,vue,json,css,scss}\"",
     "format:all": "npm run format && npm run lint:fix",
     "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
-    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix"
+    "lint:fix": "eslint . --ext .js,.jsx,.ts,.tsx --fix",
+    "test:backend": "cd backend && npm run test"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^7.1.0",
